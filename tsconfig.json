@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "outDir": "./dist",
+    "module": "esnext",
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "target": "es2015",
+    "lib": ["dom"],
+    "moduleResolution": "node",
+    "downlevelIteration": true,
+    "preserveWatchOutput": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules"]
+}
