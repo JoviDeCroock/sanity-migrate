@@ -2,6 +2,7 @@ import sanity from '@sanity/client';
 import fs, { promises as fsPromises } from 'fs';
 import path from 'path';
 import { MigrateConfig } from './config';
+import url from 'url';
 
 export type MigrationsDocumentType = {
   _id: string;
@@ -10,7 +11,7 @@ export type MigrationsDocumentType = {
   lastRun: Date;
 }
 
-export async function migrate(config: MigrateConfig) {
+export async function migrate(config: MigrateConfig, plan: boolean) {
   const client = sanity({
     projectId: config.projectId,
     dataset: config.dataset,
@@ -18,6 +19,7 @@ export async function migrate(config: MigrateConfig) {
     withCredentials: true,
     useCdn: false,
     useProjectHostname: true,
+    apiVersion: config.version || undefined,
   });
 
   const migrationsDirectory = path.resolve(config.cwd, 'migrations');
@@ -29,18 +31,17 @@ export async function migrate(config: MigrateConfig) {
   }
 
   const migrations = await fsPromises.readdir(migrationsDirectory);
-  console.log(`Found ${migrations.length} migrations in ${migrationsDirectory}.`);
 
-  let migrationsDocument: MigrationsDocumentType | undefined = await client.getDocument('migrations');
+  let migrationsDocument: MigrationsDocumentType | undefined = await client.getDocument('__SANITY_MIGRATE_CLI__migrations');
   if (!migrationsDocument) {
     console.log(`Could not find an existing migrations document for the ${process.env.SANITY_DATASET} dataset, creating new...`);
     migrationsDocument = {
       _id: '__SANITY_MIGRATE_CLI__migrations',
-      _type: '__SANITY_MIGRATE_CLI__migrations',
+      _type: 'sanity-migrate.migrations',
       succeeded: [],
       lastRun: new Date(),
     }
-    await client.create(migrationsDocument);
+    if (!plan) await client.create(migrationsDocument);
   }
 
   if (!migrationsDocument.succeeded || !Array.isArray(migrationsDocument.succeeded)) {
@@ -55,11 +56,10 @@ export async function migrate(config: MigrateConfig) {
   }
 
   const migrationToExecute = migrations.filter(m => !migrationsDocument!.succeeded.includes(m));
-
   const transation = client.transaction();
   try {
     for (const migration of migrationToExecute) {
-      const { up } = await import(path.resolve(migrationsDirectory, migration));
+      const { up } = await import(url.pathToFileURL(path.resolve(migrationsDirectory, migration)).toString());
       if (!up || typeof up !== 'function') {
         throw new Error(`${migration} does not export an "up" function.`);
       }
@@ -72,14 +72,23 @@ export async function migrate(config: MigrateConfig) {
     return;
   }
 
-  await client.createOrReplace({
-    _id: 'migrations',
-    _type: 'migrations',
-    succeeded: migrations,
-    lastRun: new Date(),
-  });
-
-  const result = await transation.commit();
-
-  console.log(`Migrations succeeded, the result:\n\n${JSON.stringify(result, undefined, 2)}`)
+  if (!plan) {
+    try {
+      const result = await transation.commit();
+      console.log(`Migrations succeeded, the result:\n\n${JSON.stringify(result, undefined, 2)}`);
+      await client.createOrReplace({
+        _id: '__SANITY_MIGRATE_CLI__migrations',
+        _type: 'sanity-migrate.migrations',
+        succeeded: migrations,
+        lastRun: new Date(),
+      });
+    } catch (e) {
+      console.error(`A migration errored... Rolling back`);
+      console.error(e);
+      transation.reset();
+      return;
+    }
+  } else {
+    console.log(`Migrations output: ${transation.serialize()}`)
+  }
 }

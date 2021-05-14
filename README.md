@@ -18,6 +18,8 @@ why we're going to look for a configuration in your `package.json` or a file in 
 
 Will all do the job so you can say tell the cli what dataset it needs to target.
 
+[An example config](./example/sanity-migrate.config.js)
+
 ## Migrations
 
 By default the cli will look for `process.cwd()/migrations` and go over all the `.js` files in there,
@@ -47,7 +49,7 @@ When all migrations execute the migration will commit and the cli will write a d
 ```js
 const migrationsDocument = {
   _id: '__SANITY_MIGRATE_CLI__migrations',
-  _type: '__SANITY_MIGRATE_CLI__migrations',
+  _type: 'sanity-migrate.migrations',
   succeeded: [], // Contains all filenames of the "migrations" directory.
   lastRun: new Date(),
 }
@@ -73,4 +75,4 @@ and running
 sanity-migrate 
 ```
 
-you can optionally add `--cwd x` to change the current working directory.
+you can optionally add `--plan` to test out the migration.

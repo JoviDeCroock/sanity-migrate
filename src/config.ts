@@ -1,21 +1,19 @@
 // @ts-ignore
-import { loadCosmiConfig } from "cosmiconfig-lite";
+import cosmiconfig from "cosmiconfig";
 
 export type MigrateConfig = {
   dataset: string;
   projectId: string;
   token: string;
+  version?: string;
   cwd: string;
 }
 
-export function loadConfig(cwd?: string) {
-	const config: MigrateConfig = loadCosmiConfig(
-		"sanity-migrate",
-		cwd || process.cwd()
-  );
+export async function loadConfig(cwd?: string) {
+	const { config }: { config: MigrateConfig } = (await (cosmiconfig('sanity-migrate')) || {});
 
   if (!config) {
-    throw new Error(`Could not find a sanity-migrate.config in "${cwd || process.cwd()}".`);
+    throw new Error(`Could not find a sanity-migrate.config in "${cwd}".`);
   }
 
   if (!config.dataset || typeof config.dataset !== 'string') {
